@@ -1,9 +1,12 @@
 export DATABASE_URL ?= postgres://dice_app:dice_app@localhost:5432/dice?sslmode=disable
 
-.PHONY: up down run test test-race
+.PHONY: up db down run test test-race
 
 up:
-	docker compose up -d
+	docker compose up -d --build
+
+db:
+	docker compose up -d postgres
 
 down:
 	docker compose down

@@ -19,7 +19,7 @@ No fim de cada fase o projeto compila e os testes passam. **O MVP entregável fi
 ## Decisões de arquitetura (o que vou defender)
 
 1. **O jogo e o dinheiro estão separados.** No iGaming B2B o saldo vive no operador (casino), não no fornecedor do jogo. Este modelo chama-se *seamless wallet*. O serviço de jogo só conhece uma interface de wallet. Aqui a implementação é local (Postgres, com tabelas próprias); em produção seria um cliente HTTP para a API de wallet do operador.
-2. **Uma só lógica e dois transportes.** WebSocket (obrigatório no enunciado; a API do produto) e HTTP (testes automáticos no Postman e back-office) chamam o mesmo serviço.
+2. **Uma só lógica e dois transportes.** WebSocket (a preferência do enunciado e do entrevistador; a API do produto) e HTTP (testes automáticos no Postman e back-office) chamam o mesmo serviço.
 3. **As proteções também estão na BD.** Índice único parcial = no máximo uma jogada ativa por cliente; `CHECK (balance >= 0)`; chaves únicas de idempotência. Com pedidos concorrentes ou várias instâncias, a BD recusa estados inválidos.
 4. **Idempotência nos dois lados.** No jogo (`requestId` / `Idempotency-Key`) e na wallet (`txID`). Um retry nunca debita nem credita duas vezes.
 5. **O clientId vem do token.** Se o do pedido for diferente, a resposta é 403 (evita IDOR).

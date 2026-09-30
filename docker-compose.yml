@@ -16,5 +16,16 @@ services:
       timeout: 3s
       retries: 15
 
+  api:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://dice_app:dice_app@postgres:5432/dice?sslmode=disable
+      DEV_MODE: "true"
+    ports:
+      - "8080:8080"
+
 volumes:
   pgdata:
