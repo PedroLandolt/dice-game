@@ -8,11 +8,13 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/PedroLandolt/dice-game/internal/config"
 	"github.com/PedroLandolt/dice-game/internal/game"
+	"github.com/PedroLandolt/dice-game/internal/httpapi"
 	"github.com/PedroLandolt/dice-game/internal/storage"
 	"github.com/PedroLandolt/dice-game/internal/wallet"
 )
@@ -43,15 +45,38 @@ func run(logger *slog.Logger) error {
 		return fmt.Errorf("ping database: %w", err)
 	}
 
+	walletStore := wallet.NewPostgres(pool)
 	limits := game.BetLimits{Min: cfg.MinBet, Max: cfg.MaxBet}
-	service := game.NewService(wallet.NewPostgres(pool), storage.NewPlays(pool), limits, cfg.WalletTimeout)
+	service := game.NewService(walletStore, storage.NewPlays(pool), limits, cfg.WalletTimeout)
 	go service.RunCleanup(ctx, logger)
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
+	var devReset func(context.Context) error
+	if cfg.DevMode {
+		devReset = walletStore.Reset
+	}
+	server := &http.Server{
+		Addr:              cfg.Addr,
+		Handler:           httpapi.NewHandler(service, storage.NewTokens(pool), logger, devReset),
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
 
-	logger.Info("server starting", "addr", cfg.Addr)
-	return http.ListenAndServe(cfg.Addr, mux)
+	serverErr := make(chan error, 1)
+	go func() {
+		logger.Info("server starting", "addr", cfg.Addr, "devMode", cfg.DevMode)
+		serverErr <- server.ListenAndServe()
+	}()
+
+	select {
+	case err := <-serverErr:
+		return err
+	case <-ctx.Done():
+	}
+
+	logger.Info("server shutting down")
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return server.Shutdown(shutdownCtx)
 }

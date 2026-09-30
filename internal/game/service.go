@@ -32,18 +32,32 @@ type Service struct {
 	walletTimeout time.Duration
 }
 
+type WalletState struct {
+	Balance  int64
+	Currency string
+	OpenPlay *Play
+}
+
 func NewService(wallet Wallet, plays PlayStore, limits BetLimits, walletTimeout time.Duration) *Service {
 	return &Service{wallet: wallet, plays: plays, limits: limits, walletTimeout: walletTimeout}
 }
 
-func (s *Service) Balance(ctx context.Context, playerID string) (int64, string, error) {
-	ctx, cancel := context.WithTimeout(ctx, s.walletTimeout)
+func (s *Service) Wallet(ctx context.Context, playerID string) (WalletState, error) {
+	walletCtx, cancel := context.WithTimeout(ctx, s.walletTimeout)
 	defer cancel()
-	balance, currency, err := s.wallet.Balance(ctx, playerID)
+	balance, currency, err := s.wallet.Balance(walletCtx, playerID)
 	if err != nil {
-		return 0, "", fmt.Errorf("%w: %w", ErrWalletUnavailable, err)
+		return WalletState{}, fmt.Errorf("%w: %w", ErrWalletUnavailable, err)
 	}
-	return balance, currency, nil
+	state := WalletState{Balance: balance, Currency: currency}
+	play, found, err := s.plays.FindOpen(ctx, playerID)
+	if err != nil {
+		return WalletState{}, err
+	}
+	if found {
+		state.OpenPlay = &play
+	}
+	return state, nil
 }
 
 func (s *Service) Play(ctx context.Context, playerID, requestID string, amount int64, bet BetType) (Play, error) {

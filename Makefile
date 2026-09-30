@@ -8,6 +8,7 @@ up:
 down:
 	docker compose down
 
+run: export DEV_MODE = true
 run:
 	go run ./cmd/server
 

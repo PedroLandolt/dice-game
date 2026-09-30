@@ -14,6 +14,7 @@ type Config struct {
 	MinBet        int64
 	MaxBet        int64
 	WalletTimeout time.Duration
+	DevMode       bool
 }
 
 func Load() (Config, error) {
@@ -39,6 +40,7 @@ func Load() (Config, error) {
 		MinBet:        minBet,
 		MaxBet:        maxBet,
 		WalletTimeout: walletTimeout,
+		DevMode:       os.Getenv("DEV_MODE") == "true",
 	}, nil
 }
 

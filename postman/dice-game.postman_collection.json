@@ -1,0 +1,1271 @@
+{
+  "info": {
+    "name": "Dice Game API",
+    "description": "HTTP API of the dice game. Run the whole collection against `docker compose up` (DEV_MODE=true). The Setup folder settles open plays and resets balances, so the collection can run any number of times.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.test(\"has X-Request-Id header\", () => pm.expect(pm.response.headers.get(\"X-Request-Id\")).to.be.a(\"string\").and.not.empty);",
+          "if (pm.response.code >= 400) {",
+          "  pm.test(\"error format\", () => {",
+          "    const error = pm.response.json().error;",
+          "    pm.expect(error.code).to.be.a(\"string\");",
+          "    pm.expect(error.message).to.be.a(\"string\");",
+          "    pm.expect(error.requestId).to.eql(pm.response.headers.get(\"X-Request-Id\"));",
+          "  });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "playKey",
+      "value": ""
+    },
+    {
+      "key": "reusedKey",
+      "value": ""
+    },
+    {
+      "key": "balanceBefore",
+      "value": ""
+    },
+    {
+      "key": "balanceAfter",
+      "value": ""
+    },
+    {
+      "key": "playId",
+      "value": ""
+    },
+    {
+      "key": "rolled",
+      "value": ""
+    },
+    {
+      "key": "payout",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "0. Setup",
+      "item": [
+        {
+          "name": "End open play (gandalf)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gandalfToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/clients/gandalf/end-play"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"settled or nothing to settle\", () => pm.expect(pm.response.code).to.be.oneOf([200, 409]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "End open play (luffy)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{luffyToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/clients/luffy/end-play"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"settled or nothing to settle\", () => pm.expect(pm.response.code).to.be.oneOf([200, 409]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "End open play (dante)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{danteToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/clients/dante/end-play"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"settled or nothing to settle\", () => pm.expect(pm.response.code).to.be.oneOf([200, 409]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "End open play (mr-robot)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{mrRobotToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/clients/mr-robot/end-play"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"settled or nothing to settle\", () => pm.expect(pm.response.code).to.be.oneOf([200, 409]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reset balances",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/dev/reset"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 204\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "1. Happy path (gandalf)",
+      "item": [
+        {
+          "name": "Wallet before",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gandalfToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/clients/gandalf/wallet"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"no open play\", () => pm.expect(body.openPlay).to.eql(null));",
+                  "pm.test(\"currency EUR\", () => pm.expect(body.currency).to.eql(\"EUR\"));",
+                  "pm.collectionVariables.set(\"balanceBefore\", body.balance);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Play 500 on even",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gandalfToken}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{playKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/clients/gandalf/play",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"amount\":500,\"type\":\"even\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"playKey\", pm.variables.replaceIn(\"{{$guid}}\"));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "const before = Number(pm.collectionVariables.get(\"balanceBefore\"));",
+                  "pm.test(\"rolled 1..6\", () => pm.expect(body.rolled).to.be.within(1, 6));",
+                  "pm.test(\"result matches the roll\", () => pm.expect(body.result).to.eql(body.rolled % 2 === 0 ? \"win\" : \"lose\"));",
+                  "pm.test(\"payout is 2x on win, 0 on lose\", () => pm.expect(body.payout).to.eql(body.result === \"win\" ? 1000 : 0));",
+                  "pm.test(\"bet was debited\", () => pm.expect(body.balance).to.eql(before - 500));",
+                  "pm.collectionVariables.set(\"playId\", body.playId);",
+                  "pm.collectionVariables.set(\"rolled\", body.rolled);",
+                  "pm.collectionVariables.set(\"payout\", body.payout);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Play again with the same key (idempotent)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gandalfToken}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{playKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/clients/gandalf/play",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"amount\":500,\"type\":\"even\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"same play, dice not rolled again\", () => {",
+                  "  pm.expect(body.playId).to.eql(pm.collectionVariables.get(\"playId\"));",
+                  "  pm.expect(body.rolled).to.eql(Number(pm.collectionVariables.get(\"rolled\")));",
+                  "});",
+                  "pm.test(\"not debited twice\", () => pm.expect(body.balance).to.eql(Number(pm.collectionVariables.get(\"balanceBefore\")) - 500));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Wallet shows the open play",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gandalfToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/clients/gandalf/wallet"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"open play is the one just made\", () => pm.expect(pm.response.json().openPlay.playId).to.eql(pm.collectionVariables.get(\"playId\")));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "End play",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gandalfToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/clients/gandalf/end-play"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "const payout = Number(pm.collectionVariables.get(\"payout\"));",
+                  "pm.test(\"credited the payout\", () => pm.expect(body.credited).to.eql(payout));",
+                  "pm.test(\"final balance = before - bet + payout\", () => pm.expect(body.balance).to.eql(Number(pm.collectionVariables.get(\"balanceBefore\")) - 500 + payout));",
+                  "pm.collectionVariables.set(\"balanceAfter\", body.balance);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Wallet after",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gandalfToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/clients/gandalf/wallet"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"balance matches end play\", () => pm.expect(body.balance).to.eql(Number(pm.collectionVariables.get(\"balanceAfter\"))));",
+                  "pm.test(\"no open play\", () => pm.expect(body.openPlay).to.eql(null));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Protections",
+      "item": [
+        {
+          "name": "PLAY_ALREADY_OPEN: first play",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{danteToken}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/clients/dante/play",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"amount\":500,\"type\":\"odd\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PLAY_ALREADY_OPEN: second play while one is open",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{danteToken}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/clients/dante/play",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"amount\":500,\"type\":\"odd\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 409\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"error code PLAY_ALREADY_OPEN\", () => pm.expect(pm.response.json().error.code).to.eql(\"PLAY_ALREADY_OPEN\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PLAY_ALREADY_OPEN: cleanup",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{danteToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/clients/dante/end-play"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "NO_OPEN_PLAY: end play with nothing open",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{danteToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/clients/dante/end-play"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 409\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"error code NO_OPEN_PLAY\", () => pm.expect(pm.response.json().error.code).to.eql(\"NO_OPEN_PLAY\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INSUFFICIENT_FUNDS: luffy bets 10 EUR with 5 EUR",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{luffyToken}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/clients/luffy/play",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"amount\":1000,\"type\":\"even\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 422\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"error code INSUFFICIENT_FUNDS\", () => pm.expect(pm.response.json().error.code).to.eql(\"INSUFFICIENT_FUNDS\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INVALID_BET_AMOUNT: zero",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gandalfToken}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/clients/gandalf/play",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"amount\":0,\"type\":\"even\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"error code INVALID_BET_AMOUNT\", () => pm.expect(pm.response.json().error.code).to.eql(\"INVALID_BET_AMOUNT\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INVALID_BET_AMOUNT: negative",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gandalfToken}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/clients/gandalf/play",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"amount\":-500,\"type\":\"even\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"error code INVALID_BET_AMOUNT\", () => pm.expect(pm.response.json().error.code).to.eql(\"INVALID_BET_AMOUNT\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INVALID_BET_AMOUNT: below minimum (4 cents)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gandalfToken}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/clients/gandalf/play",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"amount\":4,\"type\":\"even\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"error code INVALID_BET_AMOUNT\", () => pm.expect(pm.response.json().error.code).to.eql(\"INVALID_BET_AMOUNT\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INVALID_BET_AMOUNT: above maximum (20.01 EUR)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gandalfToken}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/clients/gandalf/play",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"amount\":2001,\"type\":\"even\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"error code INVALID_BET_AMOUNT\", () => pm.expect(pm.response.json().error.code).to.eql(\"INVALID_BET_AMOUNT\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INVALID_BET_TYPE: red",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gandalfToken}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/clients/gandalf/play",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"amount\":500,\"type\":\"red\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"error code INVALID_BET_TYPE\", () => pm.expect(pm.response.json().error.code).to.eql(\"INVALID_BET_TYPE\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INVALID_REQUEST: unknown field",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gandalfToken}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/clients/gandalf/play",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"amount\":500,\"type\":\"even\",\"multiplier\":10}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"error code INVALID_REQUEST\", () => pm.expect(pm.response.json().error.code).to.eql(\"INVALID_REQUEST\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INVALID_REQUEST: malformed JSON",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gandalfToken}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/clients/gandalf/play",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"amount\":500,",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"error code INVALID_REQUEST\", () => pm.expect(pm.response.json().error.code).to.eql(\"INVALID_REQUEST\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INVALID_REQUEST: decimal amount",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gandalfToken}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/clients/gandalf/play",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"amount\":5.5,\"type\":\"even\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"error code INVALID_REQUEST\", () => pm.expect(pm.response.json().error.code).to.eql(\"INVALID_REQUEST\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INVALID_REQUEST: body too large",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gandalfToken}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/clients/gandalf/play",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"amount\":500,\"type\":\"even\",\"padding\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"error code INVALID_REQUEST\", () => pm.expect(pm.response.json().error.code).to.eql(\"INVALID_REQUEST\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INVALID_REQUEST: missing Idempotency-Key",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gandalfToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/clients/gandalf/play",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"amount\":500,\"type\":\"even\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"error code INVALID_REQUEST\", () => pm.expect(pm.response.json().error.code).to.eql(\"INVALID_REQUEST\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "IDEMPOTENCY_KEY_REUSED: first play",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gandalfToken}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{reusedKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/clients/gandalf/play",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"amount\":500,\"type\":\"even\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"reusedKey\", pm.variables.replaceIn(\"{{$guid}}\"));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "IDEMPOTENCY_KEY_REUSED: same key, different amount",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gandalfToken}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{reusedKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/clients/gandalf/play",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"amount\":700,\"type\":\"even\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 422\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"error code IDEMPOTENCY_KEY_REUSED\", () => pm.expect(pm.response.json().error.code).to.eql(\"IDEMPOTENCY_KEY_REUSED\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "IDEMPOTENCY_KEY_REUSED: cleanup",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gandalfToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/clients/gandalf/end-play"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "UNAUTHORIZED: no token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/v1/clients/gandalf/wallet"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"error code UNAUTHORIZED\", () => pm.expect(pm.response.json().error.code).to.eql(\"UNAUTHORIZED\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "UNAUTHORIZED: unknown token",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer not-a-real-token"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/clients/gandalf/wallet"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"error code UNAUTHORIZED\", () => pm.expect(pm.response.json().error.code).to.eql(\"UNAUTHORIZED\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "FORBIDDEN: mr-robot reads gandalf's wallet",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{mrRobotToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/clients/gandalf/wallet"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"error code FORBIDDEN\", () => pm.expect(pm.response.json().error.code).to.eql(\"FORBIDDEN\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "FORBIDDEN: mr-robot plays with gandalf's money",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{mrRobotToken}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/clients/gandalf/play",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"amount\":500,\"type\":\"even\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"error code FORBIDDEN\", () => pm.expect(pm.response.json().error.code).to.eql(\"FORBIDDEN\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "NOT_FOUND: unknown route",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gandalfToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/clients/gandalf/jackpot"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"error code NOT_FOUND\", () => pm.expect(pm.response.json().error.code).to.eql(\"NOT_FOUND\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "X-Request-Id: client id is echoed",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "postman-check-1"
+              }
+            ],
+            "url": "{{baseUrl}}/healthz"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"same request id back\", () => pm.expect(pm.response.headers.get(\"X-Request-Id\")).to.eql(\"postman-check-1\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -138,6 +138,19 @@ func TestRollbackOtherPlayersTxHasNoEffect(t *testing.T) {
 	assertBalance(t, w, victimID, 10000)
 }
 
+func TestReset(t *testing.T) {
+	w := newTestWallet(t)
+	playerID := createTestPlayer(t, w.pool, 10000)
+
+	if _, err := w.Debit(t.Context(), playerID, 300, playerID+":debit"); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Reset(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	assertBalance(t, w, playerID, 10000)
+}
+
 func newTestWallet(t *testing.T) *Postgres {
 	t.Helper()
 	url := os.Getenv("DATABASE_URL")

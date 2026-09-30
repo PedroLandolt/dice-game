@@ -57,11 +57,11 @@ func TestConcurrentPlays(t *testing.T) {
 	if successes != 1 {
 		t.Errorf("successful plays = %d; want 1", successes)
 	}
-	balance, _, err := service.Balance(t.Context(), playerID)
+	state, err := service.Wallet(t.Context(), playerID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if balance != 9500 {
-		t.Errorf("balance = %d; want 9500 (one debit)", balance)
+	if state.Balance != 9500 || state.OpenPlay == nil {
+		t.Errorf("wallet = %d with open play %v; want 9500 with one open play", state.Balance, state.OpenPlay)
 	}
 }

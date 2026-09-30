@@ -131,6 +131,30 @@ func (p *Postgres) Rollback(ctx context.Context, playerID string, txID string) e
 	return nil
 }
 
+func (p *Postgres) Reset(ctx context.Context) error {
+	_, err := p.pool.Exec(ctx,
+		`WITH changed AS (
+			SELECT w.player_id, seed.amount AS seed_balance, seed.amount - w.balance AS delta
+			FROM wallets w
+			JOIN ledger_entries seed
+				ON seed.player_id = w.player_id AND seed.tx_id = 'seed:' || w.player_id
+			WHERE w.balance <> seed.amount
+			FOR UPDATE OF w
+		), updated AS (
+			UPDATE wallets w SET balance = changed.seed_balance
+			FROM changed
+			WHERE w.player_id = changed.player_id
+		)
+		INSERT INTO ledger_entries (player_id, tx_id, kind, amount, balance_after)
+		SELECT player_id, 'reset:' || gen_random_uuid(), 'adjustment', delta, seed_balance
+		FROM changed`,
+	)
+	if err != nil {
+		return fmt.Errorf("reset wallets: %w", err)
+	}
+	return nil
+}
+
 func lockBalance(ctx context.Context, tx pgx.Tx, playerID string) (int64, error) {
 	var balance int64
 	err := tx.QueryRow(ctx,
