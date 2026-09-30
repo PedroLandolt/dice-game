@@ -24,6 +24,7 @@ No fim de cada fase o projeto compila e os testes passam. **O MVP entregável fi
 4. **Idempotência nos dois lados.** No jogo (`requestId` / `Idempotency-Key`) e na wallet (`txID`). Um retry nunca debita nem credita duas vezes.
 5. **O clientId vem do token.** Se o do pedido for diferente, a resposta é 403 (evita IDOR).
 6. **Dados preparados para volume.** O ledger da wallet é append-only e particionado por mês, com índices escolhidos para as queries reais.
+7. **Nunca se mostra um resultado sem o dinheiro confirmado.** Antes do dado, se a wallet não responder, faz-se rollback e o jogador não ganha nem perde. Depois do dado, só se avança: o crédito é idempotente e acaba sempre por acontecer.
 
 ---
 
@@ -73,10 +74,15 @@ dice-game/
 
 ### Play
 
-1. Se já existe uma jogada com este `requestId`, devolve-a tal como está (idempotência).
+1. Se já existe uma jogada com este `requestId`:
+   - com `amount` ou `type` diferentes → `IDEMPOTENCY_KEY_REUSED`;
+   - `open` ou `closed` → devolve o mesmo resultado (o dado não é relançado);
+   - `rejected` → devolve o mesmo erro (guardado em `error_code`);
+   - `pending` → `PLAY_IN_PROGRESS`.
 2. Grava a jogada como `pending`. O índice único parcial sobre `pending`/`open` impede uma segunda jogada ativa, mesmo em pedidos concorrentes.
 3. Chama `wallet.Debit(clientId, amount, txID = "<playId>:debit")`.
-   - Se a wallet recusar (saldo insuficiente ou outro erro), a jogada passa a `rejected` e o erro é devolvido.
+   - Recusa definitiva (saldo insuficiente): a jogada passa a `rejected` e o erro é devolvido.
+   - Sem resposta clara (timeout, rede): chama `wallet.Rollback(txID)`, a jogada passa a `rejected` e devolve `WALLET_UNAVAILABLE`. Se o rollback também falhar, a jogada fica `pending` e a limpeza trata dela.
 4. Lança o dado, calcula o resultado e o payout, e marca a jogada como `open`.
 5. Devolve o número, win/lose, o payout e o saldo.
 
@@ -85,6 +91,11 @@ dice-game/
 1. Busca a jogada `open` do cliente. Se não existir, devolve `NO_OPEN_PLAY`.
 2. Se payout > 0, chama `wallet.Credit(clientId, payout, txID = "<playId>:credit")`. É idempotente, por isso um retry é seguro.
 3. Marca a jogada como `closed` e devolve o saldo final.
+
+### Limpeza (goroutine no serviço, a cada poucos segundos)
+
+- `pending` com mais de ~10 s: rollback e `rejected`.
+- `open` com mais de N minutos: credita o payout e fecha (auto-settle).
 
 Cada chamada à wallet leva um `context.WithTimeout`, para uma wallet lenta não prender o servidor.
 
@@ -101,8 +112,11 @@ Cada chamada à wallet leva um `context.WithTimeout`, para uma wallet lenta não
 | Sem token ou token inválido | 401 `UNAUTHORIZED` | middleware |
 | clientId diferente do token | 403 `FORBIDDEN` | middleware |
 | Retry do mesmo pedido | mesma resposta, sem mexer outra vez no saldo | `requestId` + `txID` únicos |
+| Mesma key, body diferente | 422 `IDEMPOTENCY_KEY_REUSED` | serviço |
+| Retry com a jogada ainda em curso | 409 `PLAY_IN_PROGRESS` | serviço |
 | Pedidos concorrentes | só um passa | constraints na BD |
-| Wallet lenta | timeout, erro 503 `WALLET_UNAVAILABLE` | `context.WithTimeout` |
+| Wallet lenta ou em baixo | 503 `WALLET_UNAVAILABLE`, rollback, saldo intacto | `context.WithTimeout` + `Rollback` idempotente |
+| Jogada presa ou esquecida | rollback ou auto-settle | goroutine de limpeza |
 | Body ou mensagem WS enorme | recusado | `MaxBytesReader` / limite WS |
 | Ligações lentas de propósito (Slowloris) | cortadas | timeouts no `http.Server` |
 | Erro interno | 500 sem detalhes; o detalhe fica só no log, com o request id | handler de erros |
@@ -155,7 +169,7 @@ Servidor para cliente:
 ### Lado do jogo
 
 - **api_tokens**: `token_hash` (SHA-256), `player_id`
-- **plays**: `id`, `player_id`, `request_id`, `amount`, `bet_type`, `rolled`, `won`, `payout`, `status ('pending','open','closed','rejected')`, `created_at`, `closed_at`
+- **plays**: `id`, `player_id`, `request_id`, `amount`, `bet_type`, `rolled`, `won`, `payout`, `status ('pending','open','closed','rejected')`, `error_code`, `created_at`, `closed_at`
   - `UNIQUE (player_id, request_id)` para a idempotência do jogo
   - `CREATE UNIQUE INDEX ... ON plays (player_id) WHERE status IN ('pending','open')` para garantir uma jogada ativa
   - **Sem partições**: estes índices únicos não incluem a data, e o Postgres não os permite numa tabela particionada.
@@ -163,16 +177,23 @@ Servidor para cliente:
 ### Lado da wallet (simula o operador)
 
 - **wallets**: `player_id`, `balance BIGINT NOT NULL CHECK (balance >= 0)`, `currency`
-- **wallet_transactions**: `tx_id` (PK), `player_id`, `kind`, `amount`, `balance_after`, `created_at`
+- **wallet_transactions**: `tx_id` (PK), `player_id`, `kind ('debit','credit','rollback')`, `amount`, `balance_after`, `created_at`
   - Serve para a idempotência: se o `tx_id` já existe, devolve o resultado guardado.
   - Tabela pequena; em produção limpa-se ao fim de N dias (é o que o Stripe faz com as idempotency keys).
-- **ledger_entries**: `player_id`, `tx_id`, `kind ('debit','credit')`, `amount`, `balance_after`, `created_at`
+- **ledger_entries**: `player_id`, `tx_id`, `kind ('debit','credit','rollback','adjustment')`, `amount`, `balance_after`, `created_at`
   - `PARTITION BY RANGE (created_at)`: partições mensais (mês atual e seguintes) mais uma `DEFAULT`.
   - Índice `(player_id, created_at DESC)` para o histórico do jogador.
   - Índice BRIN em `created_at` para relatórios por intervalo de datas.
   - Append-only, sem índices únicos, por isso particiona sem problemas.
 
-Seed: 2 jogadores com 100,00 € (EUR) e tokens de dev fixos (usados no environment do Postman).
+Seed (EUR, tokens de dev fixos usados no environment do Postman):
+
+| player_id | Saldo | Papel |
+|---|---|---|
+| `gandalf` | 100,00 € | happy path |
+| `luffy` | 5,00 € | `INSUFFICIENT_FUNDS` |
+| `dante` | 100,00 € | concorrência e spam |
+| `mr-robot` | 100,00 € | ataques (token dele no `clientId` de outro → 403) |
 
 ---
 
@@ -197,7 +218,7 @@ Seed: 2 jogadores com 100,00 € (EUR) e tokens de dev fixos (usados no environm
 - [ ] `go mod init`, estrutura de pastas, `.gitignore`.
 - [ ] `docker-compose.yml` com Postgres (a montar `db/init.sql`) e healthcheck.
 - [ ] `Makefile`: `up`, `down`, `run`, `test`.
-- [ ] `internal/config` com valores por defeito para dev (incluindo `DEV_MODE` e o timeout da wallet).
+- [ ] `internal/config` com valores por defeito para dev.
 - [ ] `cmd/server` arranca e responde a `/healthz`.
 
 **Pronto quando:** `curl localhost:8080/healthz` devolve 200.
@@ -215,11 +236,12 @@ Seed: 2 jogadores com 100,00 € (EUR) e tokens de dev fixos (usados no environm
 ## Fase 2: Base de dados (quarta)
 
 - [ ] `db/init.sql` com as tabelas, constraints, índices, partições do ledger e seed.
+- [ ] Utilizador da app (`DATABASE_URL`) sem `UPDATE`/`DELETE`/`TRUNCATE` em `ledger_entries`: o append-only é garantido pela BD, não só por convenção.
 - [ ] Confirmar no `psql` que as partições existem (`\d+ ledger_entries`) e que um insert vai parar à partição certa.
 
 ## Fase 3: Wallet (quarta)
 
-- [ ] Interface `Wallet` definida em `internal/game` (Balance, Debit, Credit, com `txID`).
+- [ ] Interface `Wallet` definida em `internal/game` (Balance, Debit, Credit, Rollback, com `txID`).
 - [ ] `internal/wallet`: implementação Postgres. Cada operação é uma transação que:
   - [ ] verifica o `tx_id` e, se já existe, devolve o resultado guardado;
   - [ ] faz o `UPDATE` condicional ao saldo;
@@ -228,6 +250,8 @@ Seed: 2 jogadores com 100,00 € (EUR) e tokens de dev fixos (usados no environm
   - [ ] debit e credit alteram o saldo e o ledger
   - [ ] debit acima do saldo é recusado
   - [ ] o mesmo `txID` duas vezes só altera o saldo uma vez
+  - [ ] rollback depois de um debit devolve o valor uma só vez
+  - [ ] rollback antes do debit faz com que um debit atrasado seja recusado
 
 ## Fase 4: Serviço de jogo + storage das jogadas (quarta à noite / quinta de manhã)
 
@@ -237,10 +261,15 @@ Seed: 2 jogadores com 100,00 € (EUR) e tokens de dev fixos (usados no environm
   - [ ] buscar a jogada ativa
   - [ ] buscar por `request_id`
 - [ ] Converter as violações de constraint em erros do domínio.
+- [ ] Config: `MIN_BET` (5), `MAX_BET` (2000) e o timeout da wallet.
 - [ ] Serviço em `internal/game`: saldo, jogar e terminar, com o fluxo acima. Timeout em cada chamada à wallet.
+- [ ] Respostas de idempotência do Play (mesmo resultado, `IDEMPOTENCY_KEY_REUSED`, `PLAY_IN_PROGRESS`).
+- [ ] Goroutine de limpeza (`pending` antigas → rollback; `open` antigas → auto-settle), arrancada pelo `main`.
 - [ ] Testes unitários do serviço com a wallet e o storage fake, incluindo:
   - [ ] a wallet recusa → a jogada fica `rejected` e é possível jogar outra vez
-  - [ ] a wallet dá timeout → erro `WALLET_UNAVAILABLE`
+  - [ ] timeout → rollback → `rejected` → `WALLET_UNAVAILABLE` → é possível jogar outra vez
+  - [ ] mesma key → mesmo resultado
+  - [ ] mesma key com outro body → `IDEMPOTENCY_KEY_REUSED`
 - [ ] Teste de integração: **20 goroutines a fazer Play ao mesmo tempo para o mesmo jogador → exatamente 1 tem sucesso e o saldo só é debitado uma vez.**
 
 ## Fase 5: API HTTP + Postman (quinta de manhã) ← MVP entregável
@@ -248,14 +277,14 @@ Seed: 2 jogadores com 100,00 € (EUR) e tokens de dev fixos (usados no environm
 - [ ] Rotas com `http.NewServeMux`.
 - [ ] Middleware de request id (`X-Request-Id` no log, na resposta e nos erros).
 - [ ] Middleware de auth (Bearer → hash → jogador → `context`) e verificação do clientId (403).
-- [ ] Middleware de log (com a duração do pedido) e de recover.
+- [ ] Middleware de log (com a duração do pedido) e de recover. Nunca regista o header `Authorization` nem tokens.
 - [ ] Handlers Wallet, Play (`Idempotency-Key` obrigatório) e EndPlay.
-- [ ] `/dev/reset`, registado só quando `DEV_MODE=true`.
+- [ ] `DEV_MODE` no config (default `false`); `/dev/reset` registado só quando está a `true`. Repõe os saldos com um movimento `adjustment` no ledger, sem apagar histórico.
 - [ ] Um único sítio que converte os erros do domínio em HTTP.
 - [ ] `MaxBytesReader` e `DisallowUnknownFields`.
 - [ ] `http.Server` com timeouts e graceful shutdown.
 - [ ] Testes dos handlers com `httptest`.
-- [ ] Collection do Postman + environment:
+- [ ] Collection do Postman (formato v2.1) + environment, confirmada a importar e a correr no Insomnia:
   - [ ] o primeiro pedido chama `/dev/reset`, para a collection se poder correr várias vezes
   - [ ] happy path: wallet → play → end-play → wallet
   - [ ] os testes leem o `result` e verificam a conta do saldo, sem assumir win ou lose
@@ -267,6 +296,7 @@ Seed: 2 jogadores com 100,00 € (EUR) e tokens de dev fixos (usados no environm
 ## Fase 6: WebSocket (quinta, depois da técnica)
 
 - [ ] `/v1/ws` com o mesmo middleware de auth.
+- [ ] Auth compatível com browsers (a API de WebSocket não envia `Authorization`): token na query string ou em `Sec-WebSocket-Protocol`, sempre sobre TLS.
 - [ ] Origin check, limite de tamanho por mensagem, ping/pong.
 - [ ] Loop: decode do envelope → switch pelo `type` → serviço → resposta com o mesmo `requestId`.
 - [ ] Só uma goroutine escreve no socket.
@@ -297,18 +327,23 @@ Seed: 2 jogadores com 100,00 € (EUR) e tokens de dev fixos (usados no environm
 - [ ] Secção "O que faria a seguir", uma frase por item:
   - [ ] wallet real do operador por HTTP, com rollback
   - [ ] transactional outbox
-  - [ ] rate limiting
-  - [ ] job que fecha jogadas esquecidas
+  - [ ] rate limiting (se o extra não for feito)
   - [ ] RTP configurável (2x = RTP 100%)
   - [ ] RNG auditável / provably fair
   - [ ] métricas
   - [ ] CI
 - [ ] `docs/aws.md`, uma página: ALB (suporta WS) → ECS Fargate em 2 AZs → RDS Postgres Multi-AZ, Secrets Manager, ECR, CloudWatch, S3 para o arquivo do ledger, e onde entraria o NATS.
+- [ ] `govulncheck ./...` sem vulnerabilidades.
 - [ ] Reler o código todo e conseguir explicar cada função.
 
 ## Extras (só se sobrar tempo, por esta ordem)
 
+- [ ] **Aposta num número** (d6), com pagamento por RTP (ex.: 97% → 5,82×, em basis points).
+- [ ] **d20**: `RollDie(sides int)` e aposta num número de 1 a 20.
 - [ ] **Mock do operador**: um segundo container Go com a sua própria BD e a API de wallet; o jogo passa a usar um cliente HTTP que implementa a mesma interface `Wallet`. Tratar o timeout com retry usando o mesmo `txID`.
+- [ ] **Rate limit** por jogador com `golang.org/x/time/rate` → 429 `RATE_LIMITED`.
+- [ ] **Pasta "caos" na collection**: spam, retries com a mesma key, e `DEV_WALLET_DELAY` (só com `DEV_MODE`) para mostrar o timeout e o rollback ao vivo.
 - [ ] **EXPLAIN ANALYZE**: meter 1 milhão de linhas no ledger com `generate_series` e mostrar no README o plano com e sem índice, e o partition pruning.
 - [ ] **NATS**: publicar `balance_updated` depois do commit; a ligação WS subscreve `wallet.balance.<clientId>`.
-- [ ] Workflow de GitHub Actions (vet + `test -race` com Postgres), só se for mandar o repo.
+- [ ] Workflow de GitHub Actions (vet + `test -race` com Postgres + `govulncheck`), só se for mandar o repo.
+- [ ] **Ideia em bruto, por polir: dois dados em cadeia.** Lançar dois dados custa o dobro; se saírem iguais, acumula e lança outra vez (reação em cadeia). Falta definir as regras e o RTP.

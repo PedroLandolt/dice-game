@@ -54,3 +54,5 @@ Este código vai ser lido por alguém que já viu projetos gerados por IA e que 
 - Não marques tarefas como concluídas em `TASKS.md`. Sou eu que marco.
 - Não cries ficheiros ou pastas fora da estrutura de `TASKS.md` sem perguntar.
 - Se uma tarefa te parecer mal pensada ou houver uma forma mais simples, diz antes de implementar.
+- Mostra-me sempre as alterações (código, TASKS.md, CLAUDE.md) antes de as aplicar.
+- Só práticas standard da indústria; nada de soluções inventadas.
