@@ -1,12 +1,19 @@
-package httpapi
+package api
 
 import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/PedroLandolt/dice-game/internal/game"
 )
 
-const maxIdempotencyKeyLength = 128
+const (
+	maxBodyBytes            = 1 << 10
+	maxIdempotencyKeyLength = 128
+)
 
 type playRequest struct {
 	Amount int64        `json:"amount"`
@@ -41,12 +48,7 @@ func (s *server) handleWallet(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, err)
 		return
 	}
-	response := walletResponse{ClientID: playerID, Balance: state.Balance, Currency: state.Currency}
-	if state.OpenPlay != nil {
-		openPlay := newPlayResponse(*state.OpenPlay)
-		response.OpenPlay = &openPlay
-	}
-	writeJSON(w, http.StatusOK, response)
+	writeJSON(w, http.StatusOK, newWalletResponse(playerID, state))
 }
 
 func (s *server) handlePlay(w http.ResponseWriter, r *http.Request) {
@@ -55,8 +57,13 @@ func (s *server) handlePlay(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, errInvalidIdempotencyKey)
 		return
 	}
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBodyBytes))
+	if err != nil {
+		s.writeError(w, r, fmt.Errorf("%w: %w", errInvalidRequest, err))
+		return
+	}
 	var request playRequest
-	if err := decodeJSON(w, r, &request); err != nil {
+	if err := decodeJSON(body, &request); err != nil {
 		s.writeError(w, r, err)
 		return
 	}
@@ -89,6 +96,15 @@ func (s *server) handleNotFound(w http.ResponseWriter, r *http.Request) {
 	s.writeError(w, r, errNotFound)
 }
 
+func newWalletResponse(playerID string, state game.WalletState) walletResponse {
+	response := walletResponse{ClientID: playerID, Balance: state.Balance, Currency: state.Currency}
+	if state.OpenPlay != nil {
+		openPlay := newPlayResponse(*state.OpenPlay)
+		response.OpenPlay = &openPlay
+	}
+	return response
+}
+
 func newPlayResponse(play game.Play) playResponse {
 	result := "lose"
 	if play.Won {
@@ -101,4 +117,22 @@ func newPlayResponse(play game.Play) playResponse {
 		Payout:  play.Payout,
 		Balance: play.BalanceAfter,
 	}
+}
+
+func writeJSON(w http.ResponseWriter, status int, body any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(body)
+}
+
+func decodeJSON(data []byte, dst any) error {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(dst); err != nil {
+		return fmt.Errorf("%w: %w", errInvalidRequest, err)
+	}
+	if decoder.More() {
+		return fmt.Errorf("%w: unexpected data after json body", errInvalidRequest)
+	}
+	return nil
 }

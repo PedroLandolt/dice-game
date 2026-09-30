@@ -1,4 +1,4 @@
-package httpapi
+package api
 
 import (
 	"bytes"
@@ -149,7 +149,7 @@ func TestNotFoundAndDevReset(t *testing.T) {
 
 func newTestHandler(g *fakeGame, devReset func(context.Context) error) http.Handler {
 	tokens := fakeTokens{"token-gandalf": "gandalf", "token-mr-robot": "mr-robot"}
-	return NewHandler(g, tokens, slog.New(slog.DiscardHandler), devReset)
+	return NewHandler(g, tokens, slog.New(slog.DiscardHandler), devReset, nil)
 }
 
 func send(handler http.Handler, method, path, token, body string, headers map[string]string) *httptest.ResponseRecorder {
@@ -175,10 +175,11 @@ func decodeError(t *testing.T, rec *httptest.ResponseRecorder) errorBody {
 }
 
 type fakeGame struct {
-	state  game.WalletState
-	play   game.Play
-	err    error
-	panics bool
+	state        game.WalletState
+	play         game.Play
+	err          error
+	panics       bool
+	playRequests chan string
 }
 
 func (g *fakeGame) Wallet(ctx context.Context, playerID string) (game.WalletState, error) {
@@ -189,6 +190,9 @@ func (g *fakeGame) Wallet(ctx context.Context, playerID string) (game.WalletStat
 }
 
 func (g *fakeGame) Play(ctx context.Context, playerID, requestID string, amount int64, bet game.BetType) (game.Play, error) {
+	if g.playRequests != nil {
+		g.playRequests <- requestID
+	}
 	return g.play, g.err
 }
 

@@ -1,4 +1,4 @@
-package httpapi
+package api
 
 import (
 	"context"
@@ -19,14 +19,15 @@ type Tokens interface {
 }
 
 type server struct {
-	game     Game
-	tokens   Tokens
-	logger   *slog.Logger
-	devReset func(context.Context) error
+	game      Game
+	tokens    Tokens
+	logger    *slog.Logger
+	devReset  func(context.Context) error
+	wsOrigins []string
 }
 
-func NewHandler(service Game, tokens Tokens, logger *slog.Logger, devReset func(context.Context) error) http.Handler {
-	s := &server{game: service, tokens: tokens, logger: logger, devReset: devReset}
+func NewHandler(service Game, tokens Tokens, logger *slog.Logger, devReset func(context.Context) error, wsOrigins []string) http.Handler {
+	s := &server{game: service, tokens: tokens, logger: logger, devReset: devReset, wsOrigins: wsOrigins}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -35,6 +36,7 @@ func NewHandler(service Game, tokens Tokens, logger *slog.Logger, devReset func(
 	mux.Handle("GET /v1/clients/{clientId}/wallet", s.requireAuth(s.handleWallet))
 	mux.Handle("POST /v1/clients/{clientId}/play", s.requireAuth(s.handlePlay))
 	mux.Handle("POST /v1/clients/{clientId}/end-play", s.requireAuth(s.handleEndPlay))
+	mux.HandleFunc("GET /v1/ws", s.handleWS)
 	if devReset != nil {
 		mux.HandleFunc("POST /dev/reset", s.handleDevReset)
 	}

@@ -5,16 +5,18 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
 type Config struct {
-	Addr          string
-	DatabaseURL   string
-	MinBet        int64
-	MaxBet        int64
-	WalletTimeout time.Duration
-	DevMode       bool
+	Addr             string
+	DatabaseURL      string
+	MinBet           int64
+	MaxBet           int64
+	WalletTimeout    time.Duration
+	DevMode          bool
+	WSAllowedOrigins []string
 }
 
 func Load() (Config, error) {
@@ -35,12 +37,13 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	return Config{
-		Addr:          envOr("HTTP_ADDR", ":8080"),
-		DatabaseURL:   databaseURL,
-		MinBet:        minBet,
-		MaxBet:        maxBet,
-		WalletTimeout: walletTimeout,
-		DevMode:       os.Getenv("DEV_MODE") == "true",
+		Addr:             envOr("HTTP_ADDR", ":8080"),
+		DatabaseURL:      databaseURL,
+		MinBet:           minBet,
+		MaxBet:           maxBet,
+		WalletTimeout:    walletTimeout,
+		DevMode:          os.Getenv("DEV_MODE") == "true",
+		WSAllowedOrigins: envList("WS_ALLOWED_ORIGINS"),
 	}, nil
 }
 
@@ -73,4 +76,14 @@ func envDuration(key string, fallback time.Duration) (time.Duration, error) {
 		return 0, fmt.Errorf("parse %s: %w", key, err)
 	}
 	return d, nil
+}
+
+func envList(key string) []string {
+	var values []string
+	for value := range strings.SplitSeq(os.Getenv(key), ",") {
+		if value = strings.TrimSpace(value); value != "" {
+			values = append(values, value)
+		}
+	}
+	return values
 }

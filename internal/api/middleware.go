@@ -1,13 +1,11 @@
-package httpapi
+package api
 
 import (
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"fmt"
 	"net/http"
 	"regexp"
-	"strings"
 	"time"
 )
 
@@ -67,37 +65,11 @@ func (s *server) withRecover(next http.Handler) http.Handler {
 	})
 }
 
-func (s *server) requireAuth(next http.HandlerFunc) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
-		if !ok || token == "" {
-			s.writeError(w, r, errUnauthorized)
-			return
-		}
-		hash := sha256.Sum256([]byte(token))
-		playerID, found, err := s.tokens.PlayerID(r.Context(), hash[:])
-		if err != nil {
-			s.writeError(w, r, err)
-			return
-		}
-		if !found {
-			s.writeError(w, r, errUnauthorized)
-			return
-		}
-		if r.PathValue("clientId") != playerID {
-			s.writeError(w, r, errForbidden)
-			return
-		}
-		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), playerIDKey, playerID)))
-	})
-}
-
 func requestIDFrom(ctx context.Context) string {
 	id, _ := ctx.Value(requestIDKey).(string)
 	return id
 }
 
-func playerIDFrom(ctx context.Context) string {
-	id, _ := ctx.Value(playerIDKey).(string)
-	return id
+func (r *statusRecorder) Unwrap() http.ResponseWriter {
+	return r.ResponseWriter
 }

@@ -12,9 +12,9 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/PedroLandolt/dice-game/internal/api"
 	"github.com/PedroLandolt/dice-game/internal/config"
 	"github.com/PedroLandolt/dice-game/internal/game"
-	"github.com/PedroLandolt/dice-game/internal/httpapi"
 	"github.com/PedroLandolt/dice-game/internal/storage"
 	"github.com/PedroLandolt/dice-game/internal/wallet"
 )
@@ -56,7 +56,7 @@ func run(logger *slog.Logger) error {
 	}
 	server := &http.Server{
 		Addr:              cfg.Addr,
-		Handler:           httpapi.NewHandler(service, storage.NewTokens(pool), logger, devReset),
+		Handler:           api.NewHandler(service, storage.NewTokens(pool), logger, devReset, cfg.WSAllowedOrigins),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      10 * time.Second,

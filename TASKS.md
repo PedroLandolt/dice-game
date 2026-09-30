@@ -48,8 +48,7 @@ dice-game/
     game/              regras, serviço de jogo, interface Wallet
     wallet/            implementação local da wallet (Postgres)
     storage/           acesso às jogadas no Postgres
-    httpapi/           handlers e middleware HTTP
-    wsapi/             WebSocket
+    api/               HTTP e WebSocket: rotas, auth, erros, middleware
   db/init.sql          schema, partições, índices, seed
   postman/             collection + environment
   docs/aws.md

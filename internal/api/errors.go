@@ -1,15 +1,11 @@
-package httpapi
+package api
 
 import (
-	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 
 	"github.com/PedroLandolt/dice-game/internal/game"
 )
-
-const maxBodyBytes = 1 << 10
 
 var (
 	errInvalidRequest        = errors.New("invalid request")
@@ -29,7 +25,7 @@ type apiError struct {
 var apiErrors = []apiError{
 	{game.ErrInvalidBetAmount, http.StatusBadRequest, "INVALID_BET_AMOUNT", "bet amount is outside the allowed limits"},
 	{game.ErrInvalidBetType, http.StatusBadRequest, "INVALID_BET_TYPE", "bet type must be even or odd"},
-	{errInvalidRequest, http.StatusBadRequest, "INVALID_REQUEST", "request body is not valid"},
+	{errInvalidRequest, http.StatusBadRequest, "INVALID_REQUEST", "request is not valid"},
 	{errInvalidIdempotencyKey, http.StatusBadRequest, "INVALID_REQUEST", "Idempotency-Key header is required and must be at most 128 characters"},
 	{errUnauthorized, http.StatusUnauthorized, "UNAUTHORIZED", "missing or invalid token"},
 	{errForbidden, http.StatusForbidden, "FORBIDDEN", "client does not match token"},
@@ -53,13 +49,7 @@ type errorBody struct {
 }
 
 func (s *server) writeError(w http.ResponseWriter, r *http.Request, err error) {
-	matched := apiError{status: http.StatusInternalServerError, code: "INTERNAL_ERROR", message: "internal error"}
-	for _, candidate := range apiErrors {
-		if errors.Is(err, candidate.err) {
-			matched = candidate
-			break
-		}
-	}
+	matched := lookupError(err)
 	requestID := requestIDFrom(r.Context())
 	if matched.status >= http.StatusInternalServerError {
 		s.logger.Error("request failed", "requestId", requestID, "error", err)
@@ -71,21 +61,11 @@ func (s *server) writeError(w http.ResponseWriter, r *http.Request, err error) {
 	}})
 }
 
-func writeJSON(w http.ResponseWriter, status int, body any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(body)
-}
-
-func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) error {
-	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(dst); err != nil {
-		return fmt.Errorf("%w: %w", errInvalidRequest, err)
+func lookupError(err error) apiError {
+	for _, candidate := range apiErrors {
+		if errors.Is(err, candidate.err) {
+			return candidate
+		}
 	}
-	if decoder.More() {
-		return fmt.Errorf("%w: unexpected data after json body", errInvalidRequest)
-	}
-	return nil
+	return apiError{status: http.StatusInternalServerError, code: "INTERNAL_ERROR", message: "internal error"}
 }
