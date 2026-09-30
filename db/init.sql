@@ -4,18 +4,19 @@ CREATE TABLE api_tokens (
 );
 
 CREATE TABLE plays (
-    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    player_id  TEXT NOT NULL,
-    request_id TEXT NOT NULL,
-    amount     BIGINT NOT NULL CHECK (amount > 0),
-    bet_type   TEXT NOT NULL CHECK (bet_type IN ('even', 'odd')),
-    rolled     INTEGER CHECK (rolled BETWEEN 1 AND 6),
-    won        BOOLEAN,
-    payout     BIGINT CHECK (payout >= 0),
-    status     TEXT NOT NULL CHECK (status IN ('pending', 'open', 'closed', 'rejected')),
-    error_code TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    closed_at  TIMESTAMPTZ,
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    player_id     TEXT NOT NULL,
+    request_id    TEXT NOT NULL,
+    amount        BIGINT NOT NULL CHECK (amount > 0),
+    bet_type      TEXT NOT NULL CHECK (bet_type IN ('even', 'odd')),
+    rolled        INTEGER CHECK (rolled BETWEEN 1 AND 6),
+    won           BOOLEAN,
+    payout        BIGINT CHECK (payout >= 0),
+    balance_after BIGINT CHECK (balance_after >= 0),
+    status        TEXT NOT NULL CHECK (status IN ('pending', 'open', 'closed', 'rejected')),
+    error_code    TEXT,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    closed_at     TIMESTAMPTZ,
     CONSTRAINT plays_player_request_unique UNIQUE (player_id, request_id)
 );
 
