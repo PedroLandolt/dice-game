@@ -24,7 +24,10 @@ func TestCreateOpenAndFind(t *testing.T) {
 		t.Fatalf("Create() = %+v; want an id and status pending", created)
 	}
 
-	created.Rolled, created.Won, created.Payout, created.BalanceAfter = 4, true, 1000, 9500
+	created.Rolled = 4
+	created.Won = true
+	created.Payout = 1000
+	created.BalanceAfter = 9500
 	opened, err := p.MarkOpen(t.Context(), created)
 	if err != nil || !opened {
 		t.Fatalf("MarkOpen() = %v, %v; want true, nil", opened, err)

@@ -103,11 +103,11 @@ func (s *Service) debit(ctx context.Context, play Play) (int64, error) {
 	debitCtx, cancel := context.WithTimeout(ctx, s.walletTimeout)
 	defer cancel()
 	balanceAfter, err := s.wallet.Debit(debitCtx, play.PlayerID, play.Amount, play.ID+":debit")
-	if errors.Is(err, ErrInsufficientFunds) {
-		return 0, s.reject(ctx, play, "INSUFFICIENT_FUNDS", err)
-	}
-	if err == nil {
+	switch {
+	case err == nil:
 		return balanceAfter, nil
+	case errors.Is(err, ErrInsufficientFunds):
+		return 0, s.reject(ctx, play, "INSUFFICIENT_FUNDS", err)
 	}
 	if rollbackErr := s.rollback(ctx, play); rollbackErr != nil {
 		return 0, fmt.Errorf("%w: %w, rollback: %w", ErrWalletUnavailable, err, rollbackErr)

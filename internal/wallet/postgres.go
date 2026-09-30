@@ -102,8 +102,11 @@ func (p *Postgres) Rollback(ctx context.Context, playerID string, txID string) e
 			return err
 		}
 		_, done, err := findTx(ctx, tx, playerID, txID, "rollback")
-		if err != nil || done {
+		if err != nil {
 			return err
+		}
+		if done {
+			return nil
 		}
 		debit, debited, err := findTx(ctx, tx, playerID, txID, "debit")
 		if err != nil {
