@@ -35,7 +35,7 @@ CREATE TABLE wallet_transactions (
     amount        BIGINT NOT NULL CHECK (amount >= 0),
     balance_after BIGINT NOT NULL,
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-    PRIMARY KEY (tx_id, kind)
+    PRIMARY KEY (player_id, tx_id, kind)
 );
 
 CREATE TABLE ledger_entries (

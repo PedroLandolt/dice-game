@@ -1,3 +1,5 @@
+export DATABASE_URL ?= postgres://dice_app:dice_app@localhost:5432/dice?sslmode=disable
+
 .PHONY: up down run test
 
 up:

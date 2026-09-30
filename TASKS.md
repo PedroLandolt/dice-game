@@ -325,6 +325,8 @@ Seed (EUR, tokens de dev fixos usados no environment do Postman):
   - [ ] **Pub/sub com NATS**: quando entraria (várias instâncias com saldo em tempo real; outros sistemas a reagir às jogadas, como relatórios, jackpots e antifraude; jogos multiplayer) e porque não faz sentido forçá-lo num jogo single-player.
   - [ ] **Redis (ElastiCache)** para estado partilhado entre instâncias: rate limit e cache (tokens, config dos operadores). Não para pub/sub.
   - [ ] **Dados**: criação automática de partições (`pg_partman`), arquivo das partições antigas para o S3 por causa da regulação, read replicas para relatórios.
+  - [ ] **Retenção de 10 anos**: `plays` quente (janela de idempotência) + `plays_archive` particionada, com a mudança num só `DELETE ... RETURNING` → `INSERT`.
+  - [ ] **Migrações**: sem ferramenta por ser um exercício; em produção, `goose` com migrações versionadas.
 - [ ] Secção "O que faria a seguir", uma frase por item:
   - [ ] wallet real do operador por HTTP, com rollback
   - [ ] transactional outbox
