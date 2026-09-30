@@ -323,6 +323,7 @@ Seed (EUR, tokens de dev fixos usados no environment do Postman):
   - [ ] **Concorrência**: o que está feito (constraints, idempotência, o teste das 20 goroutines).
   - [ ] **Latência**: porque é que WS é melhor aqui, os timeouts na wallet e os números do load test.
   - [ ] **Pub/sub com NATS**: quando entraria (várias instâncias com saldo em tempo real; outros sistemas a reagir às jogadas, como relatórios, jackpots e antifraude; jogos multiplayer) e porque não faz sentido forçá-lo num jogo single-player.
+  - [ ] **Redis (ElastiCache)** para estado partilhado entre instâncias: rate limit e cache (tokens, config dos operadores). Não para pub/sub.
   - [ ] **Dados**: criação automática de partições (`pg_partman`), arquivo das partições antigas para o S3 por causa da regulação, read replicas para relatórios.
 - [ ] Secção "O que faria a seguir", uma frase por item:
   - [ ] wallet real do operador por HTTP, com rollback
@@ -332,7 +333,7 @@ Seed (EUR, tokens de dev fixos usados no environment do Postman):
   - [ ] RNG auditável / provably fair
   - [ ] métricas
   - [ ] CI
-- [ ] `docs/aws.md`, uma página: ALB (suporta WS) → ECS Fargate em 2 AZs → RDS Postgres Multi-AZ, Secrets Manager, ECR, CloudWatch, S3 para o arquivo do ledger, e onde entraria o NATS.
+- [ ] `docs/aws.md`, uma página: ALB (suporta WS) → ECS Fargate em 2 AZs → RDS Postgres Multi-AZ, Secrets Manager, ECR, CloudWatch, S3 para o arquivo do ledger, ElastiCache (Redis) para cache e rate limit, e onde entraria o NATS.
 - [ ] `govulncheck ./...` sem vulnerabilidades.
 - [ ] Reler o código todo e conseguir explicar cada função.
 
