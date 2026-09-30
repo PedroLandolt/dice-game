@@ -109,6 +109,22 @@ func TestPlaySameKeyDifferentBody(t *testing.T) {
 	}
 }
 
+func TestCleanup(t *testing.T) {
+	s, w, p := newTestService(0)
+	p.plays["1"] = Play{ID: "1", PlayerID: "dante", Status: StatusPending}
+	p.plays["2"] = Play{ID: "2", PlayerID: "gandalf", Status: StatusOpen, Payout: 1000}
+
+	if err := s.cleanup(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if play := p.plays["1"]; play.Status != StatusRejected || w.rollbacks != 1 {
+		t.Errorf("stale pending play = %s with %d rollbacks; want rejected with 1", play.Status, w.rollbacks)
+	}
+	if play := p.plays["2"]; play.Status != StatusClosed || w.balance != 1000 {
+		t.Errorf("stale open play = %s with balance %d; want closed with 1000", play.Status, w.balance)
+	}
+}
+
 func newTestService(balance int64) (*Service, *fakeWallet, *fakePlays) {
 	w := &fakeWallet{balance: balance}
 	p := &fakePlays{plays: map[string]Play{}}

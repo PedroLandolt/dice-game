@@ -4,7 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
+)
+
+const (
+	cleanupInterval = 5 * time.Second
+	stalePendingAge = 10 * time.Second
+	staleOpenAge    = 5 * time.Minute
 )
 
 var (
@@ -93,22 +100,25 @@ func (s *Service) EndPlay(ctx context.Context, playerID string) (Play, int64, er
 }
 
 func (s *Service) debit(ctx context.Context, play Play) (int64, error) {
-	txID := play.ID + ":debit"
 	debitCtx, cancel := context.WithTimeout(ctx, s.walletTimeout)
 	defer cancel()
-	balanceAfter, err := s.wallet.Debit(debitCtx, play.PlayerID, play.Amount, txID)
+	balanceAfter, err := s.wallet.Debit(debitCtx, play.PlayerID, play.Amount, play.ID+":debit")
 	if errors.Is(err, ErrInsufficientFunds) {
 		return 0, s.reject(ctx, play, "INSUFFICIENT_FUNDS", err)
 	}
 	if err == nil {
 		return balanceAfter, nil
 	}
-	rollbackCtx, cancelRollback := context.WithTimeout(context.WithoutCancel(ctx), s.walletTimeout)
-	defer cancelRollback()
-	if rollbackErr := s.wallet.Rollback(rollbackCtx, play.PlayerID, txID); rollbackErr != nil {
+	if rollbackErr := s.rollback(ctx, play); rollbackErr != nil {
 		return 0, fmt.Errorf("%w: %w, rollback: %w", ErrWalletUnavailable, err, rollbackErr)
 	}
 	return 0, s.reject(ctx, play, "WALLET_UNAVAILABLE", fmt.Errorf("%w: %w", ErrWalletUnavailable, err))
+}
+
+func (s *Service) rollback(ctx context.Context, play Play) error {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.walletTimeout)
+	defer cancel()
+	return s.wallet.Rollback(ctx, play.PlayerID, play.ID+":debit")
 }
 
 func (s *Service) reject(ctx context.Context, play Play, code string, cause error) error {
@@ -135,6 +145,48 @@ func (s *Service) settle(ctx context.Context, play Play) (int64, error) {
 		return 0, err
 	}
 	return balance, nil
+}
+
+func (s *Service) RunCleanup(ctx context.Context, logger *slog.Logger) {
+	ticker := time.NewTicker(cleanupInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := s.cleanup(ctx); err != nil {
+				logger.Error("cleanup failed", "error", err)
+			}
+		}
+	}
+}
+
+func (s *Service) cleanup(ctx context.Context) error {
+	pending, err := s.plays.FindStale(ctx, StatusPending, stalePendingAge)
+	if err != nil {
+		return err
+	}
+	open, err := s.plays.FindStale(ctx, StatusOpen, staleOpenAge)
+	if err != nil {
+		return err
+	}
+	var errs []error
+	for _, play := range pending {
+		if err := s.rollback(ctx, play); err != nil {
+			errs = append(errs, fmt.Errorf("rollback play %s: %w", play.ID, err))
+			continue
+		}
+		if err := s.reject(ctx, play, "WALLET_UNAVAILABLE", nil); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	for _, play := range open {
+		if _, err := s.settle(ctx, play); err != nil {
+			errs = append(errs, fmt.Errorf("settle play %s: %w", play.ID, err))
+		}
+	}
+	return errors.Join(errs...)
 }
 
 func replay(play Play, amount int64, bet BetType) (Play, error) {
