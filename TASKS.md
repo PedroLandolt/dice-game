@@ -215,121 +215,121 @@ Seed (EUR, fixed dev tokens used in the Postman environment):
 
 ## Phase 0: Setup (Wednesday)
 
-- [ ] `go mod init`, folder structure, `.gitignore`.
-- [ ] `docker-compose.yml` with Postgres (mounting `db/init.sql`) and a healthcheck.
-- [ ] `Makefile`: `up`, `down`, `run`, `test`.
-- [ ] `internal/config` with defaults for dev.
-- [ ] `cmd/server` starts and answers `/healthz`.
+- [x] `go mod init`, folder structure, `.gitignore`.
+- [x] `docker-compose.yml` with Postgres (mounting `db/init.sql`) and a healthcheck.
+- [x] `Makefile`: `up`, `down`, `run`, `test`.
+- [x] `internal/config` with defaults for dev.
+- [x] `cmd/server` starts and answers `/healthz`.
 
 **Done when:** `curl localhost:8080/healthz` returns 200.
 
 ## Phase 1: Game rules (Wednesday)
 
-- [ ] Domain types and domain errors.
-- [ ] Roll the die with `crypto/rand`.
-- [ ] Pure function: number + type → won? + payout.
-- [ ] Bet validation.
-- [ ] Table-driven tests (numbers 1 to 6 x even/odd, payout, validation).
+- [x] Domain types and domain errors.
+- [x] Roll the die with `crypto/rand`.
+- [x] Pure function: number + type → won? + payout.
+- [x] Bet validation.
+- [x] Table-driven tests (numbers 1 to 6 x even/odd, payout, validation).
 
 **Done when:** `make test` is green.
 
 ## Phase 2: Database (Wednesday)
 
-- [ ] `db/init.sql` with the tables, constraints, indexes, ledger partitions and seed.
-- [ ] Application user (`DATABASE_URL`) without `UPDATE`/`DELETE`/`TRUNCATE` on `ledger_entries`: append-only is enforced by the database, not only by convention.
-- [ ] Confirm in `psql` that the partitions exist (`\d+ ledger_entries`) and that an insert lands in the right partition.
+- [x] `db/init.sql` with the tables, constraints, indexes, ledger partitions and seed.
+- [x] Application user (`DATABASE_URL`) without `UPDATE`/`DELETE`/`TRUNCATE` on `ledger_entries`: append-only is enforced by the database, not only by convention.
+- [x] Confirm in `psql` that the partitions exist (`\d+ ledger_entries`) and that an insert lands in the right partition.
 
 ## Phase 3: Wallet (Wednesday)
 
-- [ ] `Wallet` interface defined in `internal/game` (Balance, Debit, Credit, Rollback, with `txID`).
-- [ ] `internal/wallet`: Postgres implementation. Each operation is a transaction that:
-  - [ ] checks the `tx_id` and, if it already exists, returns the stored result;
-  - [ ] does the balance-conditional `UPDATE`;
-  - [ ] inserts into `wallet_transactions` and `ledger_entries`.
-- [ ] Integration tests (skipped without `DATABASE_URL`):
-  - [ ] debit and credit change the balance and the ledger
-  - [ ] a debit above the balance is refused
-  - [ ] the same `txID` twice only changes the balance once
-  - [ ] a rollback after a debit returns the amount only once
-  - [ ] a rollback before the debit makes a late debit be refused
+- [x] `Wallet` interface defined in `internal/game` (Balance, Debit, Credit, Rollback, with `txID`).
+- [x] `internal/wallet`: Postgres implementation. Each operation is a transaction that:
+  - [x] checks the `tx_id` and, if it already exists, returns the stored result;
+  - [x] does the balance-conditional `UPDATE`;
+  - [x] inserts into `wallet_transactions` and `ledger_entries`.
+- [x] Integration tests (skipped without `DATABASE_URL`):
+  - [x] debit and credit change the balance and the ledger
+  - [x] a debit above the balance is refused
+  - [x] the same `txID` twice only changes the balance once
+  - [x] a rollback after a debit returns the amount only once
+  - [x] a rollback before the debit makes a late debit be refused
 
 ## Phase 4: Game service + plays storage (Wednesday night / Thursday morning)
 
-- [ ] `internal/storage`:
-  - [ ] create a `pending` play
-  - [ ] mark as `open`/`rejected`/`closed`
-  - [ ] find the active play
-  - [ ] find by `request_id`
-- [ ] Convert constraint violations into domain errors.
-- [ ] Config: `MIN_BET` (5), `MAX_BET` (2000) and the wallet timeout.
-- [ ] Service in `internal/game`: balance, play and end, with the flow above. Timeout on every wallet call.
-- [ ] Play idempotency responses (same result, `IDEMPOTENCY_KEY_REUSED`, `PLAY_IN_PROGRESS`).
-- [ ] Cleanup goroutine (old `pending` → rollback; old `open` → auto-settle), started by `main`.
-- [ ] Service unit tests with a fake wallet and storage, including:
-  - [ ] the wallet refuses → the play stays `rejected` and it is possible to play again
-  - [ ] timeout → rollback → `rejected` → `WALLET_UNAVAILABLE` → it is possible to play again
-  - [ ] same key → same result
-  - [ ] same key with another body → `IDEMPOTENCY_KEY_REUSED`
-- [ ] Integration test: **20 goroutines playing at the same time for the same player → exactly 1 succeeds and the balance is debited only once.**
+- [x] `internal/storage`:
+  - [x] create a `pending` play
+  - [x] mark as `open`/`rejected`/`closed`
+  - [x] find the active play
+  - [x] find by `request_id`
+- [x] Convert constraint violations into domain errors.
+- [x] Config: `MIN_BET` (5), `MAX_BET` (2000) and the wallet timeout.
+- [x] Service in `internal/game`: balance, play and end, with the flow above. Timeout on every wallet call.
+- [x] Play idempotency responses (same result, `IDEMPOTENCY_KEY_REUSED`, `PLAY_IN_PROGRESS`).
+- [x] Cleanup goroutine (old `pending` → rollback; old `open` → auto-settle), started by `main`.
+- [x] Service unit tests with a fake wallet and storage, including:
+  - [x] the wallet refuses → the play stays `rejected` and it is possible to play again
+  - [x] timeout → rollback → `rejected` → `WALLET_UNAVAILABLE` → it is possible to play again
+  - [x] same key → same result
+  - [x] same key with another body → `IDEMPOTENCY_KEY_REUSED`
+- [x] Integration test: **20 goroutines playing at the same time for the same player → exactly 1 succeeds and the balance is debited only once.**
 
 ## Phase 5: HTTP API + Postman (Thursday morning)
 
-- [ ] Routes with `http.NewServeMux`.
-- [ ] Request id middleware (`X-Request-Id` in the log, the response and the errors).
-- [ ] Auth middleware (Bearer → hash → player → `context`) and clientId check (403).
-- [ ] Log middleware (with the request duration) and recover. Never logs the `Authorization` header or tokens.
-- [ ] Wallet, Play (`Idempotency-Key` required) and EndPlay handlers.
-- [ ] `DEV_MODE` in the config (default `false`); `/dev/reset` registered only when it is `true`. Restores the balances with an `adjustment` movement in the ledger, without deleting history.
-- [ ] A single place that converts domain errors into HTTP.
-- [ ] `MaxBytesReader` and `DisallowUnknownFields`.
-- [ ] `http.Server` with timeouts and graceful shutdown.
-- [ ] Handler tests with `httptest`.
-- [ ] Postman collection (v2.1 format) + environment:
-  - [ ] the first request calls `/dev/reset`, so the collection can run any number of times
-  - [ ] happy path: wallet → play → end-play → wallet
-  - [ ] the tests read the `result` and check the balance maths, without assuming win or lose
-  - [ ] one request per protection in the table
-  - [ ] `Idempotency-Key` with `{{$guid}}`; a request repeated with the same key proves idempotency
+- [x] Routes with `http.NewServeMux`.
+- [x] Request id middleware (`X-Request-Id` in the log, the response and the errors).
+- [x] Auth middleware (Bearer → hash → player → `context`) and clientId check (403).
+- [x] Log middleware (with the request duration) and recover. Never logs the `Authorization` header or tokens.
+- [x] Wallet, Play (`Idempotency-Key` required) and EndPlay handlers.
+- [x] `DEV_MODE` in the config (default `false`); `/dev/reset` registered only when it is `true`. Restores the balances with an `adjustment` movement in the ledger, without deleting history.
+- [x] A single place that converts domain errors into HTTP.
+- [x] `MaxBytesReader` and `DisallowUnknownFields`.
+- [x] `http.Server` with timeouts and graceful shutdown.
+- [x] Handler tests with `httptest`.
+- [x] Postman collection (v2.1 format) + environment:
+  - [x] the first request calls `/dev/reset`, so the collection can run any number of times
+  - [x] happy path: wallet → play → end-play → wallet
+  - [x] the tests read the `result` and check the balance maths, without assuming win or lose
+  - [x] one request per protection in the table
+  - [x] `Idempotency-Key` with `{{$guid}}`; a request repeated with the same key proves idempotency
 
 **Done when:** the collection passes twice in a row against `docker compose up`.
 
 ## Phase 6: WebSocket ← deliverable MVP
 
-- [ ] `/v1/ws` with the same auth.
-- [ ] Browser-compatible auth (the browser WebSocket API does not send `Authorization`): token in `Sec-WebSocket-Protocol`, always over TLS.
-- [ ] Origin check, size limit per message, ping/pong.
-- [ ] Loop: decode the envelope → switch on `type` → service → reply with the same `requestId`.
-- [ ] Only one goroutine writes messages to the socket.
-- [ ] Test with a WS client in `httptest` playing a round.
-- [ ] WS requests in Postman. If they cannot be exported in the collection, document examples in the README.
+- [x] `/v1/ws` with the same auth.
+- [x] Browser-compatible auth (the browser WebSocket API does not send `Authorization`): token in `Sec-WebSocket-Protocol`, always over TLS.
+- [x] Origin check, size limit per message, ping/pong.
+- [x] Loop: decode the envelope → switch on `type` → service → reply with the same `requestId`.
+- [x] Only one goroutine writes messages to the socket.
+- [x] Test with a WS client in `httptest` playing a round.
+- [x] WS requests in Postman. If they cannot be exported in the collection, document examples in the README.
 
 ## Phase 7: Docker (Thursday)
 
-- [ ] Multi-stage Dockerfile: build on `golang`, runtime on `distroless/static`, non-root.
-- [ ] `api` service in compose, depending on a healthy Postgres, with `DEV_MODE=true`.
+- [x] Multi-stage Dockerfile: build on `golang`, runtime on `distroless/static`, non-root.
+- [x] `api` service in compose, depending on a healthy Postgres, with `DEV_MODE=true`.
 
 **Done when:** a clean clone + `docker compose up` + Postman works with nothing else.
 
 ## Phase 8: Measure and document (Thursday night)
 
-- [ ] Load test with `hey` against Wallet (for example 2000 requests, 50 concurrent) and record p50/p99 in the README.
-- [ ] README:
-  - [ ] how to run it
-  - [ ] the HTTP API and the WS protocol
-  - [ ] the protections table
-  - [ ] the architecture decisions
-  - [ ] the data model (why the ledger is partitioned and the plays are not)
-- [ ] **"How I would scale this"** section, answering what was asked in the interview:
-  - [ ] **Concurrency**: what is done (constraints, idempotency, the 20-goroutine test).
-  - [ ] **Latency**: why WS is better here, the wallet timeouts and the load test numbers.
-  - [ ] **Pub/sub with NATS**: when it would come in (several instances with real-time balance; other systems reacting to plays, such as reporting, jackpots and anti-fraud; multiplayer games) and why forcing it into a single-player game makes no sense.
-  - [ ] **Redis (ElastiCache)** for state shared between instances: rate limit and cache (tokens, operator config). Not for pub/sub.
-  - [ ] **Data**: automatic partition creation (`pg_partman`), archiving old partitions to S3 for regulation, read replicas for reports.
-  - [ ] **10-year retention**: a hot `plays` table (idempotency window) + a partitioned `plays_archive`, moved with a single `DELETE ... RETURNING` → `INSERT`.
-  - [ ] **Migrations**: no tool because this is an exercise; in production, `goose` with versioned migrations.
-- [ ] "Possible extensions" section, one sentence per idea.
-- [ ] `docs/aws.md`, one page: ALB (supports WS) → ECS Fargate in 2 AZs → RDS Postgres Multi-AZ, Secrets Manager, ECR, CloudWatch, S3 for the ledger archive, ElastiCache (Redis) for cache and rate limit, and where NATS would come in.
-- [ ] `govulncheck ./...` with no vulnerabilities.
+- [x] Load test with `hey` against Wallet (for example 2000 requests, 50 concurrent) and record p50/p99 in the README.
+- [x] README:
+  - [x] how to run it
+  - [x] the HTTP API and the WS protocol
+  - [x] the protections table
+  - [x] the architecture decisions
+  - [x] the data model (why the ledger is partitioned and the plays are not)
+- [x] **"How I would scale this"** section, answering what was asked in the interview:
+  - [x] **Concurrency**: what is done (constraints, idempotency, the 20-goroutine test).
+  - [x] **Latency**: why WS is better here, the wallet timeouts and the load test numbers.
+  - [x] **Pub/sub with NATS**: when it would come in (several instances with real-time balance; other systems reacting to plays, such as reporting, jackpots and anti-fraud; multiplayer games) and why forcing it into a single-player game makes no sense.
+  - [x] **Redis (ElastiCache)** for state shared between instances: rate limit and cache (tokens, operator config). Not for pub/sub.
+  - [x] **Data**: automatic partition creation (`pg_partman`), archiving old partitions to S3 for regulation, read replicas for reports.
+  - [x] **10-year retention**: a hot `plays` table (idempotency window) + a partitioned `plays_archive`, moved with a single `DELETE ... RETURNING` → `INSERT`.
+  - [x] **Migrations**: no tool because this is an exercise; in production, `goose` with versioned migrations.
+- [x] "Possible extensions" section, one sentence per idea.
+- [x] `docs/aws.md`, one page: ALB (supports WS) → ECS Fargate in 2 AZs → RDS Postgres Multi-AZ, Secrets Manager, ECR, CloudWatch, S3 for the ledger archive, ElastiCache (Redis) for cache and rate limit, and where NATS would come in.
+- [x] `govulncheck ./...` with no vulnerabilities.
 - [ ] Re-read all the code and be able to explain every function.
 
 ## Extras (only if there is time, in this order)
@@ -341,5 +341,5 @@ Seed (EUR, fixed dev tokens used in the Postman environment):
 - [ ] **"Chaos" folder in the collection**: spam, retries with the same key, and `DEV_WALLET_DELAY` (only with `DEV_MODE`) to show the timeout and the rollback live.
 - [ ] **EXPLAIN ANALYZE**: put 1 million rows in the ledger with `generate_series` and show in the README the plan with and without the index, and the partition pruning.
 - [ ] **NATS**: publish `balance_updated` after the commit; the WS connection subscribes to `wallet.balance.<clientId>`.
-- [ ] GitHub Actions workflow (vet + `test -race` with Postgres + `govulncheck` + the collection against `docker compose`).
+- [x] GitHub Actions workflow (vet + `test -race` with Postgres + `govulncheck` + the collection against `docker compose`).
 - [ ] **Rough idea, still to polish: two dice in a chain.** Rolling two dice costs double; if they match, it accumulates and rolls again (a chain reaction). The rules and the RTP are still to be defined.
