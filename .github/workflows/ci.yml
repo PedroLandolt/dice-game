@@ -10,11 +10,12 @@ permissions:
 
 jobs:
   lint:
+    name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
 
@@ -30,16 +31,17 @@ jobs:
         run: go vet ./...
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v8
+        uses: golangci/golangci-lint-action@v9
         with:
           version: v2.14.0
 
   vulncheck:
+    name: Vulnerability check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
 
@@ -47,6 +49,7 @@ jobs:
         run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
   test:
+    name: Unit and integration tests
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -65,9 +68,9 @@ jobs:
     env:
       DATABASE_URL: postgres://dice_app:dice_app@localhost:5432/dice?sslmode=disable
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
 
@@ -77,12 +80,13 @@ jobs:
       - name: Unit and integration tests with the race detector
         run: go test -race -count=1 ./...
 
-  e2e:
+  full-stack:
+    name: Full stack (Docker, Postman, WebSocket)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
 
@@ -106,16 +110,19 @@ jobs:
               -e postman/dice-game.postman_environment.json
           done
 
+      - name: Build the terminal client
+        run: go build -o play ./cmd/play
+
       - name: Play a round over WebSocket
         run: |
-          output=$( (sleep 1; echo "play 500 even"; sleep 1; echo "end"; sleep 1; echo "quit") | go run ./cmd/play )
+          output=$( (sleep 2; echo "play 500 even"; sleep 2; echo "end"; sleep 2; echo "quit") | ./play )
           echo "$output"
           echo "$output" | grep -q "rolled"
           echo "$output" | grep -q "credited"
 
       - name: Refuse a WebSocket with an unknown token
         run: |
-          if go run ./cmd/play -token not-a-token < /dev/null; then
+          if ./play -token not-a-token < /dev/null; then
             exit 1
           fi
 
