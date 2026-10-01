@@ -1266,6 +1266,71 @@
           ]
         }
       ]
+    },
+    {
+      "name": "3. Play yourself",
+      "description": "Play by hand. Change betAmount (cents, 5 to 2000) and betType (even or odd) in the environment, then Send Play and End play.",
+      "item": [
+        {
+          "name": "Wallet",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gandalfToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/clients/gandalf/wallet"
+          },
+          "event": []
+        },
+        {
+          "name": "Play",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gandalfToken}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/clients/gandalf/play",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"amount\": {{betAmount}}, \"type\": \"{{betType}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": []
+        },
+        {
+          "name": "End play",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gandalfToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/clients/gandalf/end-play"
+          },
+          "event": []
+        }
+      ]
     }
   ]
 }

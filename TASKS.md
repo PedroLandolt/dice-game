@@ -43,6 +43,7 @@ No fim de cada fase o projeto compila e os testes passam. **O MVP entregável fi
 ```
 dice-game/
   cmd/server/          main: config, BD, HTTP + WS, graceful shutdown
+  cmd/play/            cliente WebSocket de terminal para jogar e fazer demos
   internal/
     config/            env vars
     game/              regras, serviço de jogo, interface Wallet
