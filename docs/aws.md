@@ -1,17 +1,14 @@
 # Running on AWS
 
-```text
-casino frontend
-      | HTTPS / WSS
-Route 53 + ACM certificate
-      |
-Application Load Balancer (public subnets, AWS WAF)
-      |
-ECS Fargate service, 2+ tasks across 2 availability zones (private subnets)
-      |                         |                          |
-RDS PostgreSQL Multi-AZ    ElastiCache Redis          NATS (when events are needed)
-      |
-S3 (archived ledger partitions)
+```mermaid
+flowchart TD
+    frontend["Casino frontend"] -- "HTTPS / WSS" --> dns["Route 53 + ACM certificate"]
+    dns --> alb["Application Load Balancer<br/>public subnets, AWS WAF"]
+    alb --> ecs["ECS Fargate service<br/>2+ tasks across 2 availability zones<br/>private subnets"]
+    ecs --> rds[("RDS PostgreSQL Multi-AZ")]
+    ecs --> redis[("ElastiCache Redis")]
+    ecs -.-> nats["NATS<br/>when events are needed"]
+    rds --> s3[("S3<br/>archived ledger partitions")]
 ```
 
 | Piece | Role |

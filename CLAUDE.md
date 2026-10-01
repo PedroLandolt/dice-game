@@ -1,58 +1,58 @@
-# Regras do projeto
+# Project rules
 
-Contexto: exercício técnico para uma vaga de backend Go (iGaming). Estou a aprender Go e tenho de conseguir explicar cada linha deste código numa entrevista. O plano e as tarefas estão em `TASKS.md`.
+Context: technical exercise for a Go backend role (iGaming). I am learning Go and must be able to explain every line of this code in an interview. The plan and the tasks are in `TASKS.md`.
 
-## Código
+## Code
 
-- Go idiomático e simples, que alguém a começar em Go perceba. Preferir sempre a standard library.
-- Dependências: só as listadas em `TASKS.md`. Para qualquer outra, pergunta primeiro e explica porquê.
-- **Zero comentários no código.** Nenhum. O código tem de se explicar pelos nomes e pela estrutura.
-- Funções curtas, com uma responsabilidade. Nada de abstrações "para o futuro", generics, reflection, builders, factories ou outros padrões enterprise.
-- Interfaces só onde existem duas implementações reais (por exemplo, a real e a fake dos testes), definidas no package que as usa.
-- Structs só com os campos necessários.
-- Erros: devolver com contexto (`fmt.Errorf("...: %w", err)`); erros de domínio como `var ErrX = errors.New("...")`; nunca `panic` para controlo de fluxo.
-- Dinheiro sempre `int64` em cêntimos. Nunca `float`.
-- Aleatoriedade sempre com `crypto/rand`.
-- `context.Context` como primeiro argumento em tudo o que faz I/O.
-- `gofmt`, `go vet` e `golangci-lint` têm de passar.
+- Simple, idiomatic Go that someone starting with Go can follow. Always prefer the standard library.
+- Dependencies: only those listed in `TASKS.md`. For any other one, ask first and explain why.
+- **No comments in the code.** None. The code must explain itself through names and structure.
+- Short functions with a single responsibility. No abstractions "for the future", generics, reflection, builders, factories or other enterprise patterns.
+- Interfaces only where two real implementations exist (for example the real one and the test fake), defined in the package that uses them.
+- Structs only with the fields they need.
+- Errors: return them with context (`fmt.Errorf("...: %w", err)`); domain errors as `var ErrX = errors.New("...")`; never `panic` for control flow.
+- Money is always `int64` in cents. Never `float`.
+- Randomness always from `crypto/rand`.
+- `context.Context` as the first argument of everything that does I/O.
+- `gofmt`, `go vet` and `golangci-lint` must pass.
 
-## O código não pode parecer gerado
+## Simple and deliberate
 
-Este código vai ser lido por alguém que já viu projetos gerados por IA e que os reconhece. Tem de parecer escrito por uma pessoa com critério.
+Code is read far more often than it is written; every line should be there for a reason.
 
-- Menos é melhor. Antes de acrescentar código, pergunta se é mesmo necessário para a tarefa.
-- Nada de `Manager`, `Helper`, `Util`, `Handler` genérico, packages `utils`/`common`/`helpers`, nem wrappers que só chamam outra função.
-- Nada de código morto: opções de config sem uso, funções não chamadas, `TODO`s, parâmetros ignorados.
-- Nada de verificações defensivas para situações impossíveis.
-- Logs só em pontos com significado (início e fim de um pedido, erros), não em cada passo.
-- Um só estilo em todo o projeto: a mesma forma de tratar erros, de fazer o decode de JSON e de escrever respostas, sempre.
-- Mensagens de erro em minúsculas, sem pontuação final (convenção do Go).
-- Diffs pequenos. Se uma alteração passar das ~150 linhas, parte-a em passos.
-- Documentação (README, docs) em tom técnico e direto: sem emojis, sem frases de marketing, sem secções vazias.
-- No fim de cada fase, diz-me o que se pode apagar ou simplificar sem perder funcionalidade.
+- Less is better. Before adding code, ask whether the task really needs it.
+- No `Manager`, `Helper`, `Util`, generic `Handler`, `utils`/`common`/`helpers` packages, or wrappers that only call another function.
+- No dead code: unused config options, functions that are never called, `TODO`s, ignored parameters.
+- No defensive checks for impossible situations.
+- Logs only at meaningful points (start and end of a request, errors), not at every step.
+- One style across the whole project: the same way of handling errors, decoding JSON and writing responses, always.
+- Error messages in lowercase, without final punctuation (Go convention).
+- Small diffs. If a change goes beyond ~150 lines, split it into steps.
+- Documentation (README, docs) in a technical, direct tone: no emojis, no marketing phrases, no empty sections.
+- At the end of each phase, list what can be deleted or simplified without losing functionality.
 
-## Base de dados e fluxo
+## Database and flow
 
-- O schema está todo em `db/init.sql`; não há ferramenta de migrações. O Postgres só corre este ficheiro quando o volume é criado, por isso depois de alterar o schema é preciso `docker compose down -v && docker compose up -d`. Diz-me sempre que isso for necessário.
-- Não alteres a ordem do fluxo do Play (`pending` → debit na wallet → dado → `open`) nem do EndPlay sem discutir comigo primeiro.
-- Sempre que mexeres no serviço de jogo, na wallet ou no storage das jogadas, explica no chat o que acontece se o processo cair entre cada passo.
-- Os testes de integração saltam (`t.Skip`) quando `DATABASE_URL` não está definida.
+- The whole schema is in `db/init.sql`; there is no migration tool. Postgres only runs this file when the volume is created, so after changing the schema you need `docker compose down -v && docker compose up -d`. Always tell me when that is needed.
+- Do not change the order of the Play flow (`pending` → wallet debit → die → `open`) or of EndPlay without discussing it with me first.
+- Whenever the game service, the wallet or the plays storage changes, explain in the chat what happens if the process crashes between each step.
+- Integration tests skip (`t.Skip`) when `DATABASE_URL` is not set.
 
-## Nomes
+## Names
 
-- Nunca renomeies identificadores que eu escrevi.
-- Se eu já escrevi as structs e as assinaturas, implementa só os corpos.
-- Se precisares de tipos, structs, funções, métodos, constantes ou variáveis de package novos, propõe os nomes numa lista curta e **espera que eu escolha** antes de implementar. Variáveis locais triviais (`err`, `ctx`, `i`, `tx`) não precisam de aprovação.
+- Never rename identifiers I wrote.
+- If I already wrote the structs and the signatures, implement only the bodies.
+- If you need new types, structs, functions, methods, constants or package variables, propose the names in a short list and **wait for my choice** before implementing. Trivial local variables (`err`, `ctx`, `i`, `tx`) need no approval.
 
-## Forma de trabalhar
+## Way of working
 
-- Uma tarefa de `TASKS.md` de cada vez.
-- Antes de escrever código, diz em poucas linhas o que vais fazer e que ficheiros vais tocar.
-- No fim de cada tarefa, corre `go build ./...`, `go vet ./...` e os testes relevantes, e mostra o resultado.
-- As explicações ficam no chat, nunca no código. Explica as partes menos óbvias sem que eu tenha de pedir.
-- Não faças commits nem push. Sou eu que faço.
-- Não marques tarefas como concluídas em `TASKS.md`. Sou eu que marco.
-- Não cries ficheiros ou pastas fora da estrutura de `TASKS.md` sem perguntar.
-- Se uma tarefa te parecer mal pensada ou houver uma forma mais simples, diz antes de implementar.
-- Mostra-me sempre as alterações (código, TASKS.md, CLAUDE.md) antes de as aplicar.
-- Só práticas standard da indústria; nada de soluções inventadas.
+- One task from `TASKS.md` at a time.
+- Before writing code, say in a few lines what you are going to do and which files you will touch.
+- At the end of each task, run `go build ./...`, `go vet ./...` and the relevant tests, and show the result.
+- Explanations stay in the chat, never in the code. Explain the less obvious parts without me having to ask.
+- Do not commit or push. I do that.
+- Do not mark tasks as done in `TASKS.md`. I do that.
+- Do not create files or folders outside the structure in `TASKS.md` without asking.
+- If a task looks badly thought out or there is a simpler way, say so before implementing.
+- Always show me the changes (code, TASKS.md, CLAUDE.md) before applying them.
+- Industry-standard practices only; no invented solutions.

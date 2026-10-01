@@ -1,5 +1,7 @@
 # Dice Game Backend
 
+[![CI](https://github.com/PedroLandolt/dice-game/actions/workflows/ci.yml/badge.svg)](https://github.com/PedroLandolt/dice-game/actions/workflows/ci.yml)
+
 Backend for an even/odd dice game, written in Go with PostgreSQL. Players connect over WebSocket (the primary API) or HTTP, and both transports call the same game service. Balances live in a wallet that is kept separate from the game, as in B2B iGaming, where the operator (the casino) owns the player's money and the game provider only calls its wallet API.
 
 ## Quick start
@@ -217,18 +219,17 @@ Every error has the same shape, over HTTP and WebSocket alike:
 
 ## Architecture
 
-```text
-   WebSocket  /v1/ws                     HTTP  /v1/clients/{clientId}/...
-            \                                   /
-             internal/api        auth, error mapping, request id, logs
-                          |
-             internal/game       rules, play flow, idempotency, cleanup
-                /                                  \
-     game.Wallet interface                  game.PlayStore interface
-               |                                     |
-     internal/wallet                        internal/storage
-     wallets, wallet_transactions,          plays, api_tokens
-     ledger_entries
+```mermaid
+flowchart TD
+    client["Casino frontend, Postman or cmd/play"]
+    client -- "WebSocket /v1/ws" --> api
+    client -- "HTTP /v1/clients/{clientId}/..." --> api
+    api["internal/api<br/>auth, error mapping, request id, logs"] --> game
+    game["internal/game<br/>rules, play flow, idempotency, cleanup"]
+    game -- "Wallet interface" --> wallet["internal/wallet<br/>stands in for the operator"]
+    game -- "PlayStore interface" --> storage["internal/storage"]
+    wallet --> walletTables[("wallets<br/>wallet_transactions<br/>ledger_entries")]
+    storage --> gameTables[("plays<br/>api_tokens")]
 ```
 
 ### Design decisions
@@ -241,6 +242,36 @@ Every error has the same shape, over HTTP and WebSocket alike:
 6. **No result is shown unless the money is settled.** Before the die is rolled, a wallet that does not answer is rolled back and the player neither wins nor loses. After the roll the flow only moves forward: the credit is idempotent and eventually happens.
 
 ### Play and EndPlay
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant G as Game service
+    participant P as plays table
+    participant W as Wallet
+    C->>G: play (requestId, amount, type)
+    G->>P: find by requestId
+    alt already exists
+        G-->>C: same result, or same error
+    end
+    G->>P: insert pending
+    G->>W: Debit(playId:debit) with timeout
+    alt insufficient funds
+        G->>P: rejected
+        G-->>C: INSUFFICIENT_FUNDS
+    else no clear answer
+        G->>W: Rollback(playId:debit)
+        G->>P: rejected
+        G-->>C: WALLET_UNAVAILABLE
+    end
+    G->>G: roll the die, compute payout
+    G->>P: open (only if still pending)
+    G-->>C: rolled, result, payout, balance
+    C->>G: end_play
+    G->>W: Credit(playId:credit)
+    G->>P: closed
+    G-->>C: credited, balance
+```
 
 **Play**
 
@@ -455,6 +486,6 @@ Ideas for the platform:
 
 ## About this project
 
-Written as a technical exercise for a backend role. It was developed with AI assistance (Claude Code) under the working rules in [CLAUDE.md](CLAUDE.md): standard library first, no unnecessary dependencies, small reviewed steps and tests for every rule. I reviewed every change and can explain each design decision. The original plan, in Portuguese, is in [TASKS.md](TASKS.md).
+Written as a technical exercise for a backend role. It was developed with AI assistance (Claude Code) under the working rules in [CLAUDE.md](CLAUDE.md): standard library first, no unnecessary dependencies, small reviewed steps and tests for every rule. I reviewed every change and can explain each design decision. The plan and the task list are in [TASKS.md](TASKS.md).
 
 Licensed under the [MIT License](LICENSE).
